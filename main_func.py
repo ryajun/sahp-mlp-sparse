@@ -11,8 +11,7 @@ import torch
 from torch import autograd #自动求导
 
 from utils.load_synth_data import process_loaded_sequences
-from train_functions.train_sahp import make_model, train_eval_sahp#用负对数释然来评价对事件序列建模的好坏
-
+from train_functions.train_sahp import make_model, train_eval_sahp#
 
 DEFAULT_BATCH_SIZE = 16#原本不是10 忘了是多少了
 DEFAULT_HIDDEN_SIZE = 16
@@ -93,7 +92,7 @@ if __name__ == '__main__':
         with open(chosen_file, 'rb') as f:
             loaded_hawkes_data = pickle.load(f)
 
-        mu = loaded_hawkes_data['mu']              #未看懂
+        mu = loaded_hawkes_data['mu']              #
         alpha = loaded_hawkes_data['alpha']
         decay = loaded_hawkes_data['decay']
         tmax = loaded_hawkes_data['tmax']
