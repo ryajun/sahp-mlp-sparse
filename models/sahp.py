@@ -210,7 +210,7 @@ class SAHP(nn.Module):
             encoder_mlp_i = self.mlp(ev)
             encoder_mlp = encoder_mlp_i[-1 :]
             encoder_mlp = encoder_mlp.repeat(1001, 1)
-            h_t_vals = encoder_mlp +  h_t_vals  #此部分为添加部分
+            h_t_vals = encoder_mlp +  h_t_vals  #此部分为添加的MLP部分
 
 
             if print_info:
@@ -227,7 +227,7 @@ class SAHP(nn.Module):
                                  t_min=None, t_max=None,
                                  intensity_track_step=None, max_jumps=None,
                                  show=True, ax=None, qqplot=None):
-        from simulation.simulate_hawkes import fuse_node_times #看不懂
+        from simulation.simulate_hawkes import fuse_node_times #未看懂
         event_timestamps, event_types = fuse_node_times(timestamps)
 
         event_timestamps = torch.from_numpy(event_timestamps)
