@@ -78,12 +78,22 @@ class SAHP(nn.Module):
         position_embedding = self.position_emb(seq_types,seq_dt)
 
         x = type_embedding + position_embedding
+        
+        self.encoder_mlp = self.mlp(x) #输出为batch_size*seq_len*16
+        
         for i in range(self.nLayers):
             x = self.input_sublayer(x, lambda _x: self.attention.forward(_x, _x, _x, mask=src_mask))
             x = self.dropout(self.output_sublayer(x, self.feed_forward))
 
         embed_info = x
-
+         """
+         在forward加入mlp
+         """
+        embed_info = torch.cat((self.encoder_mlp,embed_info),2)  #batch_size*seq_len*32
+        embed_info = embed_info.mean(dim = 2)#batch_size*seq_len
+        embed_info = embed_info.unsqueeze(2) #batch_size*seq_len*1
+        embed_info = embed_info.repeat(1,1,16) #batch_size*seq_len*16
+        
         self.start_point = self.start_layer(embed_info)
         self.converge_point = self.converge_layer(embed_info)
         self.omega = self.decay_layer(embed_info)
@@ -196,23 +206,31 @@ class SAHP(nn.Module):
             else:
                 converge_point = torch.squeeze(self.converge_point)[-1, :]
                 start_point = torch.squeeze(self.start_point)[-1, :]
-                omega = torch.squeeze(self.omega)[-1, :] #看不懂converge start_point omega什么意思
-
+                omega = torch.squeeze(self.omega)[-1, :] #converge start_point omega什么意思
+                
+                #encoder_mlp_i =self.encoder_mlp.mean(dim=1)输出一个batch_size *16 即1*16
+                #或者encoder_mlp_i = self.encoder_mlp.mean(dim=0)
+                
             dt_vals = torch.linspace(0, hmax, n_samples + 1).to(device) #linspace返回一个1维张量，包含在区间start和end上均匀间隔的step个点
             h_t_vals = self.state_decay(converge_point,
                                         start_point,
                                         omega,
                                         dt_vals[:, None])
-
-            dt_seq_used = dt_seq_used.unsqueeze(1)#
-            seq_types_used = seq_types_used.unsqueeze(1)
-            ev = torch.cat([dt_seq_used, seq_types_used],dim=1)
-            encoder_mlp_i = self.mlp(ev)
-            encoder_mlp = encoder_mlp_i[-1 :]
-            encoder_mlp = encoder_mlp.repeat(1001, 1)
-            h_t_vals = encoder_mlp +  h_t_vals  #此部分为添加的MLP部分
-
-
+            """
+            预测时加入mlp 这部分没用到 只在forward中加入了mlp 这样训练和预测时都用到了
+            encoder_mlp = encoder_mlp_i.repeat(1001, 1)  #将其为度扩张成和h_t_vals一样
+            h_t_vals = torch.cat((encoder_mlp,h_t_vals),1)  #维度为1001*32
+            h_t_vals = h_t_vals.mean(dim = 1) #dim=1001
+            h_t_vals = h_t_vals.unsqueeze(1) #dim = 1001*1
+            h_t_vals = h_t_vals.repeat(1,16)#dim = 1001*16
+            或者
+            h_t_vals = torch.cat((encoder_mlp_i,h_t_vals),0)
+            h_t_vals = h_t_vals.mean(dim = 0)
+            h_t_vals = h_t_vals.unsqueeze(0)
+            h_t_vals = h_t_vals.repeat(1001,1)
+            
+            
+            """
             if print_info:
                 print("last event: time {:.3f} type {:.3f}"
                       .format(last_t.item(), last_type.item()))
