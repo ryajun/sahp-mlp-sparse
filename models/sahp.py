@@ -87,7 +87,7 @@ class SAHP(nn.Module):
 
         embed_info = x
          """
-         在forward加入mlp
+         在forward加入mlp 如下：
          """
         embed_info = torch.cat((self.encoder_mlp,embed_info),2)  #batch_size*seq_len*32
         embed_info = embed_info.mean(dim = 2)#batch_size*seq_len
