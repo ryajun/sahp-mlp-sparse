@@ -33,11 +33,17 @@ class SAHP(nn.Module):
         self.device = device
         self.gelu = GELU()
 
-        self.hidden_dim_list = [16,16,16,16]
-        self.latent_dim = 16 #添加
-        self.input_dim = 2#添加
+        self.hidden_dim_list = [16, 16, 16, 16]  # 添
+        self.latent_dim = 16  # 添加
+        self.input_dim = 16  # 添加
+        self.decoder_input_dim = 32  # 添
         self.mlp = MLP(self.input_dim, self.hidden_dim_list)  # 添加
+        self.decoder = MLP(self.decoder_input_dim, self.hidden_dim_list)  # 添
 
+        self.penultimate_layer = nn.Linear(self.latent_dim, self.latent_dim)  # 添加
+        self.mean_layer = nn.Linear(self.latent_dim, self.latent_dim)  # 添加
+        self.std_layer = nn.Linear(self.latent_dim, self.latent_dim)  # 添加
+        
         self.d_model = d_model
         self.type_emb = TypeEmbedding(self.input_size, d_model, padding_idx=self.process_dim)
         self.position_emb = BiasedPositionalEmbedding(d_model=d_model,max_len = max_sequence_length)
@@ -78,21 +84,38 @@ class SAHP(nn.Module):
         position_embedding = self.position_emb(seq_types,seq_dt)
 
         x = type_embedding + position_embedding
-        
-        self.encoder_mlp = self.mlp(x) #输出为batch_size*seq_len*16
+          """
+         在forward加入mlp 产生先验：
+         """
+            
+        _, target_size, _ = x.size()
+
+        hidden_s_i= self.mlp(x)#添加
+        hidden_s_c = hidden_s_i.mean(dim=1)
+        hidden_z = torch.relu(self.penultimate_layer(hidden_s_c))
+        mu = self.mean_layer(hidden_z)
+
+        log_sigma = self.std_layer(hidden_z)
+
+        sigma = 0.1 + 0.9 * torch.sigmoid(log_sigma)
+        prior_dist = torch.distributions.Normal(mu, sigma)
+        Z = prior_dist.loc
+        Z = Z.unsqueeze(1).repeat(1, target_size, 1)
+        h = torch.cat((Z, x), 2)
+        h = h.mean(dim = 2)
+        h = h.unsqueeze(2)
+        x = h.repeat(1, 1, 16)#到此
         
         for i in range(self.nLayers):
             x = self.input_sublayer(x, lambda _x: self.attention.forward(_x, _x, _x, mask=src_mask))
             x = self.dropout(self.output_sublayer(x, self.feed_forward))
 
         embed_info = x
-         """
-         在forward加入mlp 如下：
-         """
-        embed_info = torch.cat((self.encoder_mlp,embed_info),2)  #batch_size*seq_len*32
-        embed_info = embed_info.mean(dim = 2)#batch_size*seq_len
-        embed_info = embed_info.unsqueeze(2) #batch_size*seq_len*1
-        embed_info = embed_info.repeat(1,1,16) #batch_size*seq_len*16
+       
+#         embed_info = torch.cat((self.encoder_mlp,embed_info),2)  #batch_size*seq_len*32
+#         embed_info = embed_info.mean(dim = 2)#batch_size*seq_len
+#         embed_info = embed_info.unsqueeze(2) #batch_size*seq_len*1
+#         embed_info = embed_info.repeat(1,1,16) #batch_size*seq_len*16
         
         self.start_point = self.start_layer(embed_info)
         self.converge_point = self.converge_layer(embed_info)
