@@ -100,27 +100,34 @@ class SAHP(nn.Module):
         sigma = 0.1 + 0.9 * torch.sigmoid(log_sigma)
         prior_dist = torch.distributions.Normal(mu, sigma)
         Z = prior_dist.loc
-        Z = Z.unsqueeze(1).repeat(1, target_size, 1)
-        h = torch.cat((Z, x), 2)
-        h = h.mean(dim = 2)
-        h = h.unsqueeze(2)
-        x = h.repeat(1, 1, 16)#到此
-        
+        Z = Z.unsqueeze(1).repeat(1, target_size, 1)#一直到这
+
+
         for i in range(self.nLayers):
             x = self.input_sublayer(x, lambda _x: self.attention.forward(_x, _x, _x, mask=src_mask))
             x = self.dropout(self.output_sublayer(x, self.feed_forward))
 
         embed_info = x
-       
-#         embed_info = torch.cat((self.encoder_mlp,embed_info),2)  #batch_size*seq_len*32
-#         embed_info = embed_info.mean(dim = 2)#batch_size*seq_len
-#         embed_info = embed_info.unsqueeze(2) #batch_size*seq_len*1
-#         embed_info = embed_info.repeat(1,1,16) #batch_size*seq_len*16
-        
-        self.start_point = self.start_layer(embed_info)
-        self.converge_point = self.converge_layer(embed_info)
-        self.omega = self.decay_layer(embed_info)
+        embed_info = torch.cat((Z,embed_info),2)
+        embed_info_decoder = self.decoder(embed_info)
+        hidden_z = embed_info_decoder
+        # embed = self.activation(embed_info)
+        #
+        #
+        # # self.encoder_mlp = self.mlp(embed_info)
+        # embed_info = torch.cat((Z,embed_info),1)
+        # embed_info = embed_info.mean(dim = 2)
+        # embed_info = embed_info.unsqueeze(2)
+        # embed_info = embed_info.repeat(1,1,16)
+        #
+        # # hidden_z = torch.tanh(self.mean_layer(embed_info ))
+        # hidden_z = embed_info
 
+        self.start_point = self.start_layer(hidden_z)
+        self.converge_point = self.converge_layer(hidden_z)
+        self.omega = self.decay_layer(hidden_z)
+        
+        
     def compute_loss(self, seq_times, seq_onehot_types,n_mc_samples = 20):
         """
         Compute the negative log-likelihood as a loss function.
